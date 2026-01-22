@@ -1,79 +1,3 @@
-
-Gmct
-label_app
-main.typ
-Files
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
 #set page(paper: "us-letter", margin: 0.5in)
 
 // --- Dynamic Scaling Calculation ---
@@ -144,4 +68,52 @@ Files
             [],
             block(width: 90%, author),
             line(length: box-h * 0.2, stroke: 0.5pt),
+            block(width: 90%, upper(title)),
+            []
+          )
+        }
+      )
+    ))
+
+  } else {
+
+    // ============================
+    // Thin Label Logic
+    // ============================
+    rect(
+      width: box-w,
+      height: box-h,
+      stroke: 0.5pt,
+      inset: (x: 0.2in, y: 0.1in),
+
+      {
+        set text(font: "Linux Libertine", size: f-size, hyphenate: false)
+        set par(leading: 0.3em, justify: false)
+
+        align(horizon, grid(
+          columns: (1fr, auto, 1fr, auto, 1fr),
+          align: horizon,
+
+          [],
+          block(width: box-w * title-width-factor(author), author),
+          [],
+          block(width: box-w * title-width-factor(title), upper(title)),
+          []
+        ))
+      }
+    )
+
+  }
+}
+
+// --- Render ---
+#let data = csv("labels.csv")
+
+#grid(
+  columns: 1,
+  gutter: 0.4in,
+  ..data.slice(1).map(row => {
+    let (author, title, h, w) = row
+    make-label(author, title, h, w,)
+  })
 )
