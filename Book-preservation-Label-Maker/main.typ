@@ -1,119 +1,135 @@
 #set page(paper: "us-letter", margin: 0.5in)
 
 // --- Dynamic Scaling Calculation ---
-#let get-font-size(h, is-vertical) = {
+#let get-font-size(h, w, is-vertical) = {
+  let h = float(h)
+  let w = float(w)
   if is-vertical {
-    // Vertical boxes: font is roughly 8% of total height
-    return float(h) * 1in * 0.08
+    return (h * 0.05 + w * 0.04) * 1in
   } else {
-    // Thin horizontal boxes: font is roughly 30% of height
-    return float(h) * 1in * 0.30
+    return (h * 0.1 + w * 0.026) * 1in
   }
 }
 
-// Helper
+// --- Helper: Split text at the middle-most space ---
+#let balance-text(txt, threshold: 20) = {
+  let txt = str(txt).trim()
+  let chars = str.len(txt)
+  if chars < threshold or chars == 0 { return txt }
+  
+  let words = txt.split(" ")
+  if words.len() <= 1 { return txt } 
+  
+  let mid = chars / 2
+  let best-space-index = 0
+  let min-diff = chars
+  let current-pos = 0
+  
+  for i in range(words.len() - 1) {
+    current-pos += words.at(i).len()
+    let diff = calc.abs(mid - current-pos)
+    if diff < min-diff {
+      min-diff = diff
+      best-space-index = i
+    }
+    current-pos += 1 
+  }
+  
+  return words.slice(0, best-space-index + 1).join(" ") + "\n" + words.slice(best-space-index + 1).join(" ")
+}
+
 #let clamp(x, min, max) = {
   if x < min { min }
   else if x > max { max }
   else { x }
 }
 
-// --- Logic for Title Space ---
 #let title-width-factor(title) = {
-  let len = str.len(title)
-
-  // Tune these bounds as desired
-  let min-len = 5     // very short title
-  let max-len = 40    // very long title
-
-  // Normalize length to 0–1
-  let t = clamp(
-    (len - min-len) / (max-len - min-len),
-    0,
-    1
-  )
-
-  // Map to 0.2–1.0 range
-  0.2 + t * 0.8
+  let len = str.len(str(title))
+  let t = clamp((len - 5) / (40 - 5), 0, 1)
+  0.2 + t * 2
 }
 
-#let make-label(author, title, h-val, w-val) = {
+#let make-label(author, title, h-val, w-val, font-adj) = {
+  // 1. Clean H/W (handles spaces and non-string types)
+  let clean-h = float(str(h-val).trim())
+  let clean-w = float(str(w-val).trim())
+  
+  // 2. Clean Font Adj (handles missing column, blank column, or spaces)
+  let adj-str = str(font-adj).trim()
+  let clean-adj = if adj-str == "" { 0.0 } else { float(adj-str) }
+  
+  let box-h = clean-h * 1in
+  let box-w = clean-w * 1in
+  let use-line = clean-h >= clean-w
+  
+  let base-f-size = get-font-size(clean-h, clean-w, use-line)
+  let final-f-size = base-f-size + (clean-adj * 1pt)
+  
+  let threshold = if use-line { 15 } else { 25 }
+  let has-author = str(author).trim() != ""
+  let balanced-author = if has-author { balance-text(author, threshold: threshold) } else { "" }
+  let balanced-title = balance-text(upper(title), threshold: threshold)
 
-  let box-h = float(h-val) * 1in
-  let box-w = float(w-val) * 1in
-  let use-line = float(h-val) >= float(w-val)
-  let f-size = get-font-size(h-val, use-line)
+  let content = {
+    set text(font: "Linux Libertine", size: final-f-size, hyphenate: false)
+    set par(leading: 0.4em, justify: false)
+    set align(center + horizon)
+
+    if not has-author {
+      // IF AUTHOR IS BLANK: Center the title only
+      block(width: 90%, balanced-title)
+    } else if use-line {
+      grid(
+        columns: 100%,
+        rows: (1fr, auto, 1fr, auto, 1fr),
+        align: center + horizon,
+        [],
+        block(width: 95%, balanced-author),
+        line(length: box-h * 0.2, stroke: 0.5pt),
+        block(width: 95%, balanced-title),
+        []
+      )
+    } else {
+      grid(
+        columns: (1fr, auto, 1fr, auto, 1fr),
+        align: center + horizon,
+        [],
+        block(width: box-w * title-width-factor(author), balanced-author),
+        [],
+        block(width: box-w * title-width-factor(title), balanced-title),
+        []
+      )
+    }
+  }
 
   if use-line {
-
-    // ============================
-    // Box Label Logic
-    // ============================
     rotate(-90deg, reflow: true, figure(
-      rect(
-        width: box-w,
-        height: box-h,
-        stroke: 0.5pt,
-        inset: (x: 0.2in, y: 0.1in),
-
-        {
-          set text(font: "Linux Libertine", size: f-size, hyphenate: false)
-          set par(leading: 0.3em, justify: false)
-
-          grid(
-            columns: 100%,
-            rows: (1fr, auto, 1fr, auto, 1fr),
-            align: center + horizon,
-
-            [],
-            block(width: 90%, author),
-            line(length: box-h * 0.2, stroke: 0.5pt),
-            block(width: 90%, upper(title)),
-            []
-          )
-        }
-      )
+      rect(width: box-w, height: box-h, stroke: 0.5pt, inset: (x: 0.1in, y: 0.1in), content)
     ))
-
   } else {
-
-    // ============================
-    // Thin Label Logic
-    // ============================
-    rect(
-      width: box-w,
-      height: box-h,
-      stroke: 0.5pt,
-      inset: (x: 0.2in, y: 0.1in),
-
-      {
-        set text(font: "Linux Libertine", size: f-size, hyphenate: false)
-        set par(leading: 0.3em, justify: false)
-
-        align(horizon, grid(
-          columns: (1fr, auto, 1fr, auto, 1fr),
-          align: horizon,
-
-          [],
-          block(width: box-w * title-width-factor(author), author),
-          [],
-          block(width: box-w * title-width-factor(title), upper(title)),
-          []
-        ))
-      }
-    )
-
+    rect(width: box-w, height: box-h, stroke: 0.5pt, inset: (x: 0.1in, y: 0.05in), content)
   }
 }
 
-// --- Render ---
+// --- Render Logic ---
 #let data = csv("labels.csv")
 
 #grid(
   columns: 1,
   gutter: 0.4in,
-  ..data.slice(1).map(row => {
-    let (author, title, h, w) = row
-    make-label(author, title, h, w,)
+  // Processes every line (no headers skipped)
+  ..data.map(row => {
+    let author = row.at(0, default: "")
+    let title  = row.at(1, default: "Untitled")
+    let h      = row.at(2, default: "2")
+    let w      = row.at(3, default: "2")
+    
+    // DELIMITER LOGIC:
+    // If the row ends after the 4th column (no trailing comma), row.len() is 4.
+    // row.at(4, default: "0") handles both the missing column and the blank column.
+    let font-adj = row.at(4, default: "0")
+    
+    make-label(author, title, h, w, font-adj)
   })
 )
